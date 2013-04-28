@@ -18,10 +18,11 @@ set ( EV_SRC
 )
 
 if (WIN32) 
-  list ( APPEND EV_SRC ev_win32.c )
+  list ( APPEND EV_LIBS Ws2_32 )
 endif ()
 
 add_library ( ev ${EV_SRC} )
+target_link_libraries ( ev ${EV_LIBS} )
 
 install_library ( ev )
 install_header ( ev.h ev++.h event.h )
