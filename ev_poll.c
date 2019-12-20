@@ -1,7 +1,7 @@
 /*
  * libev poll fd activity backend
  *
- * Copyright (c) 2007,2008,2009,2010,2011 Marc Alexander Lehmann <libev@schmorp.de>
+ * Copyright (c) 2007,2008,2009,2010,2011,2016,2019 Marc Alexander Lehmann <libev@schmorp.de>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modifica-
@@ -39,11 +39,14 @@
 
 #include <poll.h>
 
-void inline_size
-pollidx_init (int *base, int count)
+inline_size
+void
+array_needsize_pollidx (int *base, int offset, int count)
 {
-  /* consider using memset (.., -1, ...), which is practically guaranteed
-   * to work on all systems implementing poll */
+  /* using memset (.., -1, ...) is tempting, we we try
+   * to be ultraportable
+   */
+  base += offset;
   while (count--)
     *base++ = -1;
 }
@@ -56,14 +59,14 @@ poll_modify (EV_P_ int fd, int oev, int nev)
   if (oev == nev)
     return;
 
-  array_needsize (int, pollidxs, pollidxmax, fd + 1, pollidx_init);
+  array_needsize (int, pollidxs, pollidxmax, fd + 1, array_needsize_pollidx);
 
   idx = pollidxs [fd];
 
   if (idx < 0) /* need to allocate a new pollfd */
     {
       pollidxs [fd] = idx = pollcnt++;
-      array_needsize (struct pollfd, polls, pollmax, pollcnt, EMPTY2);
+      array_needsize (struct pollfd, polls, pollmax, pollcnt, array_needsize_noinit);
       polls [idx].fd = fd;
     }
 
@@ -107,14 +110,17 @@ poll_poll (EV_P_ ev_tstamp timeout)
   else
     for (p = polls; res; ++p)
       {
-        assert (("libev: poll() returned illegal result, broken BSD kernel?", p < polls + pollcnt));
+        assert (("libev: poll returned illegal result, broken BSD kernel?", p < polls + pollcnt));
 
         if (expect_false (p->revents)) /* this expect is debatable */
           {
             --res;
 
             if (expect_false (p->revents & POLLNVAL))
-              fd_kill (EV_A_ p->fd);
+              {
+                assert (("libev: poll found invalid fd in poll set", 0));
+                fd_kill (EV_A_ p->fd);
+              }
             else
               fd_event (
                 EV_A_
@@ -126,7 +132,8 @@ poll_poll (EV_P_ ev_tstamp timeout)
       }
 }
 
-int inline_size
+inline_size
+int
 poll_init (EV_P_ int flags)
 {
   backend_mintime = 1e-3;
@@ -139,7 +146,8 @@ poll_init (EV_P_ int flags)
   return EVBACKEND_POLL;
 }
 
-void inline_size
+inline_size
+void
 poll_destroy (EV_P)
 {
   ev_free (pollidxs);
